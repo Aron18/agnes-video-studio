@@ -570,7 +570,7 @@ function renderTasks() {
       bar = `<div class="progress-bar"><div class="progress-fill" style="width:${t.progress || 5}%"></div></div>`;
     }
     if (t.images && t.images.length) {
-      framesBlock = `<div class="task-frames">${t.images.map(u => `<img src="${u}" alt="frame">`).join('')}</div>`;
+      framesBlock = `<div class="task-frames">${t.images.map(u => `<img src="${u}" alt="frame" onerror="this.remove();const p=this.parentElement;if(p&&!p.children.length)p.remove()">`).join('')}</div>`;
     }
     if (t.video_url) {
       videoBlock = `
