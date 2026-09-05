@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 Agnes 视频生成工作室</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh; padding: 24px 12px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+  .card {
+    background: #fff; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff; padding: 28px 32px; text-align: center;
+  }
+  .card-header h1 { font-size: 28px; margin-bottom: 8px; }
+  .card-header p { opacity: 0.9; font-size: 14px; }
+  .card-body { padding: 28px 32px; }
+
+  .field { margin-bottom: 20px; }
+  .field-label { font-weight: 600; color: #333; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .field-hint { font-size: 12px; color: #999; font-weight: normal; }
+  textarea, input[type=text], input[type=password], select {
+    width: 100%; padding: 12px 14px; border: 2px solid #e0e0e0; border-radius: 10px;
+    font-size: 14px; font-family: inherit; transition: border-color .2s;
+  }
+  textarea:focus, input:focus, select:focus { outline: none; border-color: #667eea; }
+  textarea { resize: vertical; min-height: 90px; }
+
+  .key-row { display: flex; gap: 10px; align-items: center; }
+  .key-row input { flex: 1; }
+  .badge-ok { color: #27ae60; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .btn {
+    padding: 10px 18px; border: none; border-radius: 10px; cursor: pointer;
+    font-size: 14px; font-weight: 600; transition: transform .1s, opacity .2s;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; width: 100%; padding: 15px; font-size: 16px; }
+  .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: 8px; }
+  .btn-gray { background: #f0f0f0; color: #555; }
+  .btn-red { background: #e74c3c; color: #fff; }
+  .btn-green { background: #27ae60; color: #fff; }
+  .btn-blue { background: #3498db; color: #fff; }
+
+  /* 首尾帧上传 */
+  .frame-row { display: flex; gap: 16px; }
+  .frame-box {
+    flex: 1; border: 2px dashed #c5c5e0; border-radius: 14px; padding: 16px;
+    text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
+    position: relative; min-height: 180px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .frame-box:hover { border-color: #667eea; background: #f8f8ff; }
+  .frame-box.has-image { border-style: solid; border-color: #27ae60; cursor: default; padding: 10px; }
+  .frame-box img { max-width: 100%; max-height: 200px; border-radius: 10px; }
+  .frame-icon { font-size: 36px; margin-bottom: 8px; }
+  .frame-text { color: #888; font-size: 13px; }
+  .frame-url { font-size: 11px; color: #667eea; word-break: break-all; margin-top: 8px; }
+  .frame-remove {
+    position: absolute; top: 8px; right: 8px; background: #e74c3c; color: #fff;
+    border: none; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; font-size: 13px;
+  }
+  .frame-status { font-size: 12px; margin-top: 6px; }
+  .frame-status.uploading { color: #f39c12; }
+  .frame-status.done { color: #27ae60; }
+  .frame-status.error { color: #e74c3c; }
+
+  /* 提示条 */
+  .msg { padding: 13px 18px; border-radius: 10px; margin: 12px 0; font-size: 14px; display: none; word-break: break-word; }
+  .msg.show { display: block; }
+  .msg.success { background: #e8f8f0; color: #1e8449; border: 1px solid #a9dfbf; }
+  .msg.error { background: #fff0f0; color: #c0392b; border: 1px solid #f5b7b1; }
+  .msg.info { background: #eef2ff; color: #4a5568; border: 1px solid #c3cbf5; }
+
+  /* 任务列表 */
+  .task-list { margin-top: 8px; }
+  .task-item {
+    border: 1px solid #e8e8f0; border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    background: #fafbff;
+  }
+  .task-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .task-prompt { font-size: 14px; color: #333; flex: 1; min-width: 200px; }
+  .status-badge {
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  }
+  .status-queued { background: #fef3e0; color: #d68910; }
+  .status-progress { background: #e3f0fd; color: #2471a3; }
+  .status-completed { background: #e8f8f0; color: #1e8449; }
+  .status-failed { background: #fdecea; color: #c0392b; }
+  .progress-bar { height: 6px; background: #e8e8f0; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 3px; transition: width .4s; }
+  .task-meta { font-size: 12px; color: #999; margin: 6px 0; }
+  .task-video { width: 100%; border-radius: 10px; margin-top: 10px; max-height: 420px; background: #000; }
+  .task-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .task-videoid { font-size: 11px; color: #aaa; word-break: break-all; margin-top: 6px; }
+  .task-frames { display: flex; gap: 8px; margin-top: 8px; }
+  .task-frames img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
+  .empty { text-align: center; color: #bbb; padding: 32px 0; font-size: 14px; }
+  .list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .list-head h3 { font-size: 18px; color: #333; }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .gh-token-area { font-size: 12px; color: #888; margin-top: 6px; }
+  .gh-token-area a { color: #667eea; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="card">
+    <div class="card-header">
+      <h1>🎬 Agnes 视频生成工作室</h1>
+      <p>提示词 + 首尾帧（选填）+ 时长 → agnes-video-v2.0 生成 → 获取视频链接</p>
+    </div>
+    <div class="card-body">
+
+      <!-- API Key -->
+      <div class="field">
+        <div class="field-label">🔑 Agnes API Key <span id="keyStatus" class="badge-ok" style="display:none;">✅ 已保存</span></div>
+        <div class="key-row">
+          <input type="password" id="apiKey" placeholder="sk-xxxx（从 https://platform.agnes-ai.com/ 获取）">
+          <button class="btn btn-sm btn-gray" onclick="forgetKey()">🗑️ 忘记</button>
+        </div>
+      </div>
+
+      <!-- 提示词 -->
+      <div class="field">
+        <div class="field-label">✍️ 视频提示词 <span class="field-hint">推荐英文：主体 + 场景 + 动作 + 光照 + 镜头运动</span></div>
+        <textarea id="prompt" placeholder="例：A cinematic drone shot flying over misty mountains at sunrise, golden light, smooth forward motion, 4k, photorealistic"></textarea>
+      </div>
+
+      <!-- 时长 -->
+      <div class="field">
+        <div class="field-label">⏱️ 视频时长 <span class="field-hint">模型上限 441 帧 ≈ 18.4 秒（24fps），帧数须为 8n+1</span></div>
+        <select id="duration">
+          <option value="81">约 3.4 秒（81 帧）</option>
+          <option value="121" selected>约 5.0 秒（121 帧）· 推荐</option>
+          <option value="161">约 6.7 秒（161 帧）</option>
+          <option value="241">约 10.0 秒（241 帧）</option>
+          <option value="321">约 13.4 秒（321 帧）</option>
+          <option value="401">约 16.7 秒（401 帧）</option>
+          <option value="441">约 18.4 秒（441 帧）· 模型上限</option>
+        </select>
+      </div>
+
+      <!-- 首尾帧 -->
+      <div class="field">
+        <div class="field-label">🖼️ 首尾帧 <span class="field-hint">选填，均为公开图片 URL；上传走 GitHub 图床（与图床网页共享 Token）</span></div>
+        <div class="frame-row">
+          <div class="frame-box" id="firstFrameBox" onclick="pickFrame('first')">
+            <div class="frame-icon">🏁</div>
+            <div class="frame-text"><b>首帧（选填）</b><br>点击 / 拖拽上传图片</div>
+          </div>
+          <div class="frame-box" id="lastFrameBox" onclick="pickFrame('last')">
+            <div class="frame-icon">🏳️</div>
+            <div class="frame-text"><b>尾帧（选填）</b><br>点击 / 拖拽上传图片</div>
+          </div>
+        </div>
+        <input type="file" id="frameFile" accept="image/*" style="display:none">
+        <div class="gh-token-area">
+          上传首尾帧需要 GitHub Token（repo 权限），与 <a href="https://aron18.github.io/image-uploader/" target="_blank">图床网页</a> 共享，已保存则自动复用。
+          <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank">没有 Token？点这里创建</a>
+          <span id="ghTokenStatus"></span>
+        </div>
+      </div>
+
+      <div id="msg" class="msg"></div>
+
+      <button class="btn btn-primary" id="submitBtn" onclick="submitVideo()">🎬 生成视频</button>
+    </div>
+  </div>
+
+  <!-- 视频任务区 -->
+  <div class="card">
+    <div class="card-body">
+      <div class="list-head">
+        <h3>📼 我的视频任务</h3>
+        <button class="btn btn-sm btn-blue" id="refreshBtn" onclick="refreshAll()">🔄 刷新状态</button>
+      </div>
+      <div class="task-list" id="taskList">
+        <div class="empty">暂无任务，提交一个视频生成任务吧 🎬</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const AGNES_API = 'https://apihub.agnes-ai.com';
+const GH_API = 'https://api.github.com/repos/Aron18/image-uploader/contents';
+const VIDEO_MODEL = 'agnes-video-v2.0';
+const FRAME_RATE = 24;
+
+// 首尾帧状态：{ first: {url, name} | null, last: ... }
+let frames = { first: null, last: null };
+let currentPick = null; // 'first' | 'last'
+
+// ---------- 工具 ----------
+function $(id) { return document.getElementById(id); }
+function showMsg(text, type) {
+  const m = $('msg');
+  m.textContent = text;
+  m.className = 'msg show ' + type;
+  if (type === 'success') setTimeout(() => m.classList.remove('show'), 6000);
+}
+
+function loadKey() {
+  const k = localStorage.getItem('agnes_api_key') || '';
+  $('apiKey').value = k;
+  $('keyStatus').style.display = k ? 'inline' : 'none';
+}
+function saveKey() {
+  const k = $('apiKey').value.trim();
+  if (k) localStorage.setItem('agnes_api_key', k);
+  else localStorage.removeItem('agnes_api_key');
+  $('keyStatus').style.display = k ? 'inline' : 'none';
+}
+function forgetKey() {
+  localStorage.removeItem('agnes_api_key');
+  $('apiKey').value = '';
+  $('keyStatus').style.display = 'none';
+  showMsg('已清除 API Key', 'success');
+}
+$('apiKey').addEventListener('blur', saveKey);
+$('apiKey').addEventListener('keydown', e => { if (e.key === 'Enter') saveKey(); });
+
+function ghToken() { return localStorage.getItem('gh_token') || ''; }
+function updateGhTokenStatus() {
+  $('ghTokenStatus').textContent = ghToken() ? '（✅ GitHub Token 已就绪）' : '（⚠️ 未检测到 GitHub Token，首尾帧上传需要它）';
+}
+
+// ---------- 首尾帧上传 ----------
+function pickFrame(which) {
+  if (frames[which]) return; // 已有图片，点删除按钮才行
+  currentPick = which;
+  $('frameFile').click();
+}
+$('frameFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f && currentPick) uploadFrame(f, currentPick);
+  e.target.value = '';
+});
+
+// 拖拽支持
+['firstFrameBox', 'lastFrameBox'].forEach((boxId, i) => {
+  const box = $(boxId);
+  const which = i === 0 ? 'first' : 'last';
+  box.addEventListener('dragover', e => { e.preventDefault(); box.style.borderColor = '#667eea'; });
+  box.addEventListener('dragleave', () => { box.style.borderColor = ''; });
+  box.addEventListener('drop', e => {
+    e.preventDefault(); box.style.borderColor = '';
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) uploadFrame(f, which);
+  });
+});
+
+async function fileToBase64(file) {
+  const CHUNK = 8 * 1024;
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < buf.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// 大图压缩：>3MB 缩到 1280px + JPEG 88%（关键帧不需要太大）
+async function maybeCompress(file) {
+  if (file.size <= 3 * 1024 * 1024) return file;
+  const bitmap = await createImageBitmap(file);
+  const MAX = 1280;
+  let { width, height } = bitmap;
+  if (width > MAX || height > MAX) {
+    if (width >= height) { height = Math.round(height * MAX / width); width = MAX; }
+    else { width = Math.round(width * MAX / height); height = MAX; }
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+  return new Promise(resolve => canvas.toBlob(b => resolve(new File([b], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.88));
+}
+
+async function uploadFrame(file, which) {
+  const token = ghToken();
+  const box = $(which + 'FrameBox');
+  if (!token) {
+    showMsg('上传首尾帧需要 GitHub Token（repo 权限）。请先到图床网页保存 Token，或打开创建链接生成。', 'error');
+    return;
+  }
+  box.classList.add('has-image');
+  box.innerHTML = `<div class="frame-icon spin">⏳</div><div class="frame-status uploading">压缩并上传中...</div>`;
+  try {
+    const compressed = await maybeCompress(file);
+    const content = await fileToBase64(compressed);
+    const filename = `keyframes/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const res = await fetch(`${GH_API}/${filename}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `upload keyframe: ${file.name}`,
+        content, branch: 'main'
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'HTTP ' + res.status);
+    }
+    const data = await res.json();
+    const url = data.content.download_url;
+    frames[which] = { url, name: file.name };
+    renderFrameBox(which);
+    showMsg(`${which === 'first' ? '首帧' : '尾帧'}上传成功 ✅`, 'success');
+  } catch (e) {
+    box.classList.remove('has-image');
+    renderFrameBox(which);
+    showMsg('图片上传失败: ' + e.message, 'error');
+  }
+}
+
+function renderFrameBox(which) {
+  const box = $(which + 'FrameBox');
+  const f = frames[which];
+  if (f) {
+    box.classList.add('has-image');
+    box.onclick = null;
+    box.innerHTML = `
+      <button class="frame-remove" onclick="event.stopPropagation();removeFrame('${which}')">✕</button>
+      <img src="${f.url}" alt="${which} frame">
+      <div class="frame-url">${f.url}</div>
+      <div class="frame-status done">✅ ${which === 'first' ? '首帧' : '尾帧'}已就绪</div>`;
+  } else {
+    box.classList.remove('has-image');
+    box.onclick = () => pickFrame(which);
+    box.innerHTML = `
+      <div class="frame-icon">${which === 'first' ? '🏁' : '🏳️'}</div>
+      <div class="frame-text"><b>${which === 'first' ? '首帧（选填）' : '尾帧（选填）'}</b><br>点击 / 拖拽上传图片</div>`;
+  }
+}
+
+function removeFrame(which) {
+  frames[which] = null;
+  renderFrameBox(which);
+}
+
+// ---------- 任务存储 ----------
+function getTasks() { return JSON.parse(localStorage.getItem('video_tasks') || '[]'); }
+function setTasks(t) { localStorage.setItem('video_tasks', JSON.stringify(t)); }
+
+// ---------- 提交视频 ----------
+async function submitVideo() {
+  saveKey();
+  const apiKey = $('apiKey').value.trim();
+  const prompt = $('prompt').value.trim();
+  const numFrames = parseInt($('duration').value, 10);
+
+  if (!apiKey) { showMsg('请先输入 Agnes API Key', 'error'); return; }
+  if (!prompt) { showMsg('请输入视频提示词', 'error'); return; }
+
+  const body = {
+    model: VIDEO_MODEL,
+    prompt,
+    num_frames: numFrames,
+    frame_rate: FRAME_RATE
+  };
+  const imgUrls = [];
+  if (frames.first) imgUrls.push(frames.first.url);
+  if (frames.last) imgUrls.push(frames.last.url);
+  if (imgUrls.length) body.extra_body = { image: imgUrls, mode: 'keyframes' };
+
+  const btn = $('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 提交中...';
+  showMsg('正在提交视频生成任务...', 'info');
+
+  try {
+    const res = await fetch(`${AGNES_API}/v1/videos`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error?.message || data.message || 'HTTP ' + res.status + ' ' + JSON.stringify(data).slice(0, 200));
+    }
+    // video_id 是唯一凭据：兼容多种字段名
+    const videoId = data.video_id || data.id || data.task_id;
+    if (!videoId) throw new Error('响应中没有 video_id/id/task_id: ' + JSON.stringify(data).slice(0, 300));
+
+    const task = {
+      video_id: videoId,
+      prompt,
+      num_frames: numFrames,
+      frame_rate: FRAME_RATE,
+      images: imgUrls,
+      status: data.status || 'queued',
+      progress: data.progress || 0,
+      video_url: null,
+      created_at: Date.now(),
+      raw: data
+    };
+    const tasks = getTasks();
+    tasks.unshift(task);
+    setTasks(tasks.slice(0, 50));
+    renderTasks();
+    showMsg(`✅ 任务已提交！video_id: ${videoId}。视频生成需几分钟，点"刷新状态"获取结果。`, 'success');
+    $('prompt').value = '';
+    frames = { first: null, last: null };
+    renderFrameBox('first');
+    renderFrameBox('last');
+  } catch (e) {
+    let hint = e.message;
+    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+      hint = '网络请求失败（可能是浏览器 CORS 限制或网络不通）: ' + e.message +
+        '。Agnes API 若不允许浏览器直连，需配置代理。';
+    }
+    showMsg('提交失败: ' + hint, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎬 生成视频';
+  }
+}
+
+// ---------- 刷新任务状态 ----------
+async function refreshAll() {
+  const apiKey = $('apiKey').value.trim();
+  if (!apiKey) { showMsg('请先输入 Agnes API Key', 'error'); return; }
+  const tasks = getTasks();
+  const pending = tasks.filter(t => t.status !== 'completed' && t.status !== 'failed');
+  if (!pending.length) { showMsg('没有进行中的任务', 'info'); return; }
+
+  const btn = $('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 刷新中...';
+  showMsg(`正在查询 ${pending.length} 个任务...`, 'info');
+
+  let updated = 0;
+  for (const t of pending) {
+    try {
+      const res = await fetch(`${AGNES_API}/agnesapi?video_id=${encodeURIComponent(t.video_id)}`, {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 404) { t.status = 'failed'; t.progress = 0; }
+        else throw new Error(data.message || 'HTTP ' + res.status);
+      } else {
+        t.status = data.status || t.status;
+        t.progress = data.progress ?? t.progress;
+        // 视频链接在 remixed_from_video_id 字段
+        const vurl = data.remixed_from_video_id || data.video_url || data.url;
+        if (vurl && (t.status === 'completed' || t.status === 'success' || vurl.endsWith('.mp4') || vurl.includes('.mp4'))) {
+          t.status = 'completed';
+          t.progress = 100;
+          t.video_url = vurl;
+        }
+        t.raw_query = data;
+      }
+      updated++;
+    } catch (e) {
+      console.warn('查询失败', t.video_id, e);
+    }
+  }
+  setTasks(tasks);
+  renderTasks();
+  btn.disabled = false;
+  btn.textContent = '🔄 刷新状态';
+  const done = tasks.filter(t => t.status === 'completed').length;
+  showMsg(`刷新完成：查询 ${updated} 个任务，共 ${done} 个已完成 ✅`, done ? 'success' : 'info');
+}
+
+// ---------- 渲染任务列表 ----------
+function renderTasks() {
+  const tasks = getTasks();
+  const list = $('taskList');
+  if (!tasks.length) {
+    list.innerHTML = '<div class="empty">暂无任务，提交一个视频生成任务吧 🎬</div>';
+    return;
+  }
+  list.innerHTML = tasks.map((t, i) => {
+    const secs = (t.num_frames / t.frame_rate).toFixed(1);
+    let badge = '', bar = '', videoBlock = '', framesBlock = '';
+    if (t.status === 'completed') badge = '<span class="status-badge status-completed">✅ 已完成</span>';
+    else if (t.status === 'failed') badge = '<span class="status-badge status-failed">❌ 失败</span>';
+    else if (t.status === 'in_progress' || t.status === 'progress') badge = `<span class="status-badge status-progress">🎨 生成中 ${t.progress || 0}%</span>`;
+    else badge = '<span class="status-badge status-queued">⏳ 排队中</span>';
+
+    if (t.status !== 'completed' && t.status !== 'failed') {
+      bar = `<div class="progress-bar"><div class="progress-fill" style="width:${t.progress || 5}%"></div></div>`;
+    }
+    if (t.images && t.images.length) {
+      framesBlock = `<div class="task-frames">${t.images.map(u => `<img src="${u}" alt="frame">`).join('')}</div>`;
+    }
+    if (t.video_url) {
+      videoBlock = `
+        <video class="task-video" src="${t.video_url}" controls preload="metadata"></video>
+        <div class="task-actions">
+          <a href="${t.video_url}" target="_blank" rel="noopener"><button class="btn btn-sm btn-blue">🔗 新标签页打开</button></a>
+          <button class="btn btn-sm btn-green" onclick="copyText('${t.video_url}', this)">📋 复制视频 URL</button>
+        </div>`;
+    }
+    return `
+      <div class="task-item">
+        <div class="task-head">
+          <span class="task-prompt">${escapeHtml(t.prompt).slice(0, 120)}${t.prompt.length > 120 ? '...' : ''}</span>
+          ${badge}
+        </div>
+        ${bar}
+        <div class="task-meta">⏱️ ${secs} 秒 · ${t.num_frames} 帧 · ${new Date(t.created_at).toLocaleString('zh-CN')}</div>
+        ${framesBlock}
+        ${videoBlock}
+        <div class="task-videoid">video_id: ${t.video_id}</div>
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => btn.textContent = old, 1800);
+  }).catch(() => {
+    // 兜底
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => btn.textContent = '📋 复制视频 URL', 1800);
+  });
+}
+
+// 初始化
+loadKey();
+updateGhTokenStatus();
+renderTasks();
+</script>
+</body>
+</html>
