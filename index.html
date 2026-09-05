@@ -223,7 +223,7 @@
 
       <!-- 负面提示词 -->
       <div class="field">
-        <div class="field-label">🚫 负面提示词 <span class="field-hint">选填 · 不希望出现的内容，如模糊、水印、文字</span></div>
+        <div class="field-label">🚫 负面提示词 <span class="field-hint">选填 · 自动并入提示词（队列不支持独立负面字段）</span></div>
         <textarea id="negPrompt" style="min-height:56px" placeholder="例：blurry, low quality, watermark, text, distorted face"></textarea>
       </div>
 
@@ -288,8 +288,8 @@
 
         <!-- 负面提示词 -->
         <div class="field">
-          <div class="field-label">🚫 负面提示词 <span class="field-hint">选填 · 不希望出现的内容</span></div>
-          <textarea id="imgNegPrompt" style="min-height:56px" placeholder="例：blurry, low quality, watermark, extra fingers"></textarea>
+          <div class="field-label">🚫 负面提示词 <span class="field-hint">选填 · 自动并入提示词（队列不支持独立负面字段）</span></div>
+          <textarea id="imgNegPrompt" style="min-height:56px" placeholder="例：实体鲸鱼，动物，海洋，人物，建筑，乌云，灰暗，低画质"></textarea>
         </div>
 
         <!-- 尺寸 + 宽高比 -->
@@ -551,13 +551,14 @@ async function submitVideo() {
 
   const body = {
     model: VIDEO_MODEL,
-    prompt,
+    prompt: negPrompt
+      ? prompt + (/[\u4e00-\u9fff]/.test(negPrompt) ? '。避免出现：' : '. Avoid: ') + negPrompt
+      : prompt,
     mode: 'text',
     seconds,
     size: '720P',            // 2.5-flash 仅支持 720P
     aspect_ratio: aspectRatio
   };
-  if (negPrompt) body.negative_prompt = negPrompt;
   const imgUrls = [];
   if (frames.first) imgUrls.push(frames.first.url);
   if (frames.last) imgUrls.push(frames.last.url);
@@ -589,7 +590,7 @@ async function submitVideo() {
     const task = {
       video_id: videoId,
       model: VIDEO_MODEL,
-      prompt,
+      prompt: body.prompt,
       seconds,
       aspect_ratio: aspectRatio,
       images: imgUrls,
@@ -934,13 +935,16 @@ async function submitImage() {
   const sizeStr = `${s.w}x${s.h}`;
   const refs = refImages.filter(r => r.url).map(r => r.url);
 
-  const body = { model: IMAGE_MODEL, prompt, size: sizeStr };
+  // 队列不支持独立 negative_prompt 字段，自动并入主提示词
+  const finalPrompt = negPrompt
+    ? prompt + (/[\u4e00-\u9fff]/.test(negPrompt) ? '。避免出现：' : '. Avoid: ') + negPrompt
+    : prompt;
+  const body = { model: IMAGE_MODEL, prompt: finalPrompt, size: sizeStr };
   if (refs.length) body.extra_body = { image: refs, response_format: 'url' };
-  if (negPrompt) body.negative_prompt = negPrompt;
 
   const task = {
     id: 'img-' + Date.now(),
-    prompt, size: sizeStr, ratio: $('imgRatio').value, refs,
+    prompt: finalPrompt, size: sizeStr, ratio: $('imgRatio').value, refs,
     status: 'pending', url: null, error: null,
     created_at: Date.now()
   };
