@@ -39,7 +39,8 @@
   .badge-ok { color: #27ae60; font-size: 13px; font-weight: 600; white-space: nowrap; }
   .btn {
     padding: 10px 18px; border: none; border-radius: 10px; cursor: pointer;
-    font-size: 14px; font-weight: 600; transition: transform .1s, opacity .2s;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: transform .1s, opacity .2s;
   }
   .btn:hover { opacity: 0.88; }
   .btn:active { transform: scale(0.97); }
@@ -159,6 +160,7 @@
   }
   .meta-time { color: #aaa6c0; font-size: 10.5px; }
   .img-actions { display: flex; gap: 8px; margin: 0 5px 2px; }
+  .img-actions a { text-decoration: none; }
   .img-actions .btn {
     flex: 1; white-space: nowrap; padding: 8px 4px; font-size: 12.5px; border-radius: 9px;
     background: #f1effc; color: #667eea; font-weight: 600;
@@ -219,6 +221,12 @@
         <textarea id="prompt" placeholder="例：A cinematic drone shot flying over misty mountains at sunrise, golden light, smooth forward motion, 4k, photorealistic"></textarea>
       </div>
 
+      <!-- 负面提示词 -->
+      <div class="field">
+        <div class="field-label">🚫 负面提示词 <span class="field-hint">选填 · 不希望出现的内容，如模糊、水印、文字</span></div>
+        <textarea id="negPrompt" style="min-height:56px" placeholder="例：blurry, low quality, watermark, text, distorted face"></textarea>
+      </div>
+
       <!-- 时长 + 画幅 -->
       <div class="field">
         <div class="field-label">⏱️ 视频时长与画幅 <span class="field-hint">4–12 秒 · agnes-video-2.5-flash · 720P</span></div>
@@ -276,6 +284,12 @@
         <div class="field">
           <div class="field-label">✍️ 图片提示词 <span class="field-hint">推荐英文：主体 + 场景 + 风格 + 光照 + 画质</span></div>
           <textarea id="imgPrompt" placeholder="例：A majestic snow mountain at golden hour, photorealistic, dramatic clouds, ultra detailed"></textarea>
+        </div>
+
+        <!-- 负面提示词 -->
+        <div class="field">
+          <div class="field-label">🚫 负面提示词 <span class="field-hint">选填 · 不希望出现的内容</span></div>
+          <textarea id="imgNegPrompt" style="min-height:56px" placeholder="例：blurry, low quality, watermark, extra fingers"></textarea>
         </div>
 
         <!-- 尺寸 + 宽高比 -->
@@ -527,6 +541,7 @@ async function submitVideo() {
   const prompt = $('prompt').value.trim();
   const seconds = $('duration').value;        // V2.5：字符串 "4"–"12"
   const aspectRatio = $('aspectRatio').value;
+  const negPrompt = $('negPrompt').value.trim();
 
   if (!apiKey) { showMsg('请先输入 Agnes API Key', 'error'); return; }
   if (!prompt) { showMsg('请输入视频提示词', 'error'); return; }
@@ -542,6 +557,7 @@ async function submitVideo() {
     size: '720P',            // 2.5-flash 仅支持 720P
     aspect_ratio: aspectRatio
   };
+  if (negPrompt) body.negative_prompt = negPrompt;
   const imgUrls = [];
   if (frames.first) imgUrls.push(frames.first.url);
   if (frames.last) imgUrls.push(frames.last.url);
@@ -910,6 +926,7 @@ async function submitImage() {
   saveKey();
   const apiKey = $('apiKey').value.trim();
   const prompt = $('imgPrompt').value.trim();
+  const negPrompt = $('imgNegPrompt').value.trim();
   if (!apiKey) { showImgMsg('请先输入 Agnes API Key', 'error'); return; }
   if (!prompt) { showImgMsg('请输入图片提示词', 'error'); return; }
 
@@ -919,6 +936,7 @@ async function submitImage() {
 
   const body = { model: IMAGE_MODEL, prompt, size: sizeStr };
   if (refs.length) body.extra_body = { image: refs, response_format: 'url' };
+  if (negPrompt) body.negative_prompt = negPrompt;
 
   const task = {
     id: 'img-' + Date.now(),
