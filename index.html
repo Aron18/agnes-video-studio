@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎬 Agnes 视频生成工作室</title>
+<title>🎨 Agnes AI 创作工作室</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -107,7 +107,60 @@
   .list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .list-head h3 { font-size: 18px; color: #333; }
   .spin { display: inline-block; animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  /* ---------- 双 Tab ---------- */
+  .tab-bar { display: flex; gap: 10px; margin: 2px 0 20px; }
+  .tab-btn {
+    flex: 1; padding: 13px 0; border: 2px solid #e3e0f5; border-radius: 12px;
+    background: #f6f5fc; color: #999; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: all .15s; font-family: inherit;
+  }
+  .tab-btn:hover { border-color: #b9b4ee; }
+  .tab-btn.active { border-color: #667eea; background: #eef0ff; color: #667eea; }
+
+  /* ---------- 参考图 ---------- */
+  .ref-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ref-box {
+    width: 88px; height: 88px; border: 2px dashed #d5d2ee; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #999; font-size: 12px; cursor: pointer; position: relative;
+    background: #fafafd; text-align: center; line-height: 1.5; overflow: visible;
+  }
+  .ref-box:hover { border-color: #667eea; color: #667eea; }
+  .ref-box img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+  .ref-box .ref-remove {
+    position: absolute; top: -8px; right: -8px; width: 22px; height: 22px;
+    border-radius: 50%; border: none; background: #e74c3c; color: #fff;
+    font-size: 12px; cursor: pointer; line-height: 1; padding: 0;
+  }
+
+  /* ---------- 图片结果 ---------- */
+  .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .img-card { border: 1px solid #e8e6f8; border-radius: 12px; padding: 10px; background: #fcfcff; }
+  .img-thumb {
+    width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px;
+    cursor: zoom-in; background: #f0effa; display: block;
+  }
+  .img-prompt {
+    font-size: 12px; color: #555; margin: 8px 0 4px; word-break: break-all; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .img-meta { font-size: 11px; color: #999; margin-bottom: 8px; }
+  .img-actions { display: flex; gap: 6px; }
+  .img-actions .btn { flex: 1; }
+  .pending-box {
+    width: 100%; aspect-ratio: 1; border-radius: 8px; background: #f0effa;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #888; font-size: 13px; gap: 6px; text-align: center; padding: 8px; word-break: break-all;
+  }
+
+  /* ---------- 灯箱预览 ---------- */
+  #lightbox {
+    display: none; position: fixed; inset: 0; background: rgba(20, 18, 38, .9);
+    z-index: 999; align-items: center; justify-content: center; cursor: zoom-out; padding: 24px;
+  }
+  #lightbox.show { display: flex; }
+  #lightbox img { max-width: 92vw; max-height: 90vh; border-radius: 10px; box-shadow: 0 8px 60px rgba(0,0,0,.5); }
+  #lightbox .lightbox-tip { position: fixed; bottom: 18px; left: 0; right: 0; text-align: center; color: #ccc; font-size: 12px; }
   .gh-token-area { font-size: 12px; color: #888; margin-top: 6px; }
   .gh-token-area a { color: #667eea; }
 </style>
@@ -117,8 +170,8 @@
 
   <div class="card">
     <div class="card-header">
-      <h1>🎬 Agnes 视频生成工作室</h1>
-      <p>提示词 + 首尾帧（选填）+ 时长 → agnes-video-v2.0 生成 → 获取视频链接</p>
+      <h1>🎨 Agnes AI 创作工作室</h1>
+      <p>同一 API Key 双功能：🎬 视频生成（提示词 + 首尾帧 + 时长） · 🖼️ 图片生成（提示词 + 尺寸 + 宽高比 + 参考图）</p>
     </div>
     <div class="card-body">
 
@@ -132,6 +185,13 @@
         </div>
       </div>
 
+      <!-- 双功能 Tab -->
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabBtnVideo" onclick="switchTab('video')">🎬 视频生成</button>
+        <button class="tab-btn" id="tabBtnImage" onclick="switchTab('image')">🖼️ 图片生成</button>
+      </div>
+
+      <div id="videoForm">
       <!-- 提示词 -->
       <div class="field">
         <div class="field-label">✍️ 视频提示词 <span class="field-hint">推荐英文：主体 + 场景 + 动作 + 光照 + 镜头运动</span></div>
@@ -176,9 +236,60 @@
       <div id="msg" class="msg"></div>
 
       <button class="btn btn-primary" id="submitBtn" onclick="submitVideo()">🎬 生成视频</button>
+      </div><!-- /videoForm -->
+
+      <div id="imageForm" style="display:none">
+        <!-- 图片提示词 -->
+        <div class="field">
+          <div class="field-label">✍️ 图片提示词 <span class="field-hint">推荐英文：主体 + 场景 + 风格 + 光照 + 画质</span></div>
+          <textarea id="imgPrompt" placeholder="例：A majestic snow mountain at golden hour, photorealistic, dramatic clouds, ultra detailed"></textarea>
+        </div>
+
+        <!-- 尺寸 + 宽高比 -->
+        <div class="field">
+          <div class="field-label">📐 尺寸与宽高比 <span class="field-hint" id="sizeHint"></span></div>
+          <div class="frame-row">
+            <select id="imgSize" style="flex:1" onchange="renderSizeHint()">
+              <option value="1K">1K（长边 1024）</option>
+              <option value="2K" selected>2K（长边 2048）· 推荐</option>
+              <option value="3K">3K（长边 3072）</option>
+              <option value="4K">4K（长边 4096）</option>
+              <option value="1024x768">1024x768（固定 4:3）</option>
+            </select>
+            <select id="imgRatio" style="flex:1" onchange="renderSizeHint()">
+              <option value="1:1" selected>宽高比 1:1</option>
+              <option value="3:4">宽高比 3:4（竖）</option>
+              <option value="4:3">宽高比 4:3（横）</option>
+              <option value="16:9">宽高比 16:9（横）</option>
+              <option value="9:16">宽高比 9:16（竖）</option>
+              <option value="2:3">宽高比 2:3（竖）</option>
+              <option value="3:2">宽高比 3:2（横）</option>
+              <option value="21:9">宽高比 21:9（超宽）</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 参考图 -->
+        <div class="field">
+          <div class="field-label">🖼️ 参考图 <span class="field-hint">选填，可多张（最多 8 张）；上传走 GitHub 图床 images/（与图床网页共享 Token），URL 传给图生图接口</span></div>
+          <div class="ref-row" id="refRow">
+            <div class="ref-box" onclick="pickRef()">＋<br>添加参考图</div>
+          </div>
+          <input type="file" id="refFile" accept="image/*" multiple style="display:none">
+          <div class="gh-token-area">
+            上传参考图需要 GitHub Token（repo 权限），与 <a href="https://aron18.github.io/image-uploader/" target="_blank">图床网页</a> 共享，已保存则自动复用。
+            <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank">没有 Token？点这里创建</a>
+          </div>
+        </div>
+
+        <div id="imgMsg" class="msg"></div>
+
+        <button class="btn btn-primary" id="imgSubmitBtn" onclick="submitImage()">🖼️ 生成图片</button>
+      </div><!-- /imageForm -->
     </div>
   </div>
 
+  <div id="tab-video">
   <!-- 视频任务区 -->
   <div class="card">
     <div class="card-body">
@@ -191,13 +302,35 @@
       </div>
     </div>
   </div>
+  </div><!-- /tab-video -->
 
+  <div id="tab-image" style="display:none">
+  <div class="card">
+    <div class="card-body">
+      <div class="list-head">
+        <h3>🖼️ 图片生成结果</h3>
+        <button class="btn btn-sm btn-blue" onclick="refreshImgProgress()">🔄 刷新进度</button>
+      </div>
+      <div class="img-grid" id="imgGrid">
+        <div class="empty">暂无生成结果，提交一个图片生成任务吧 🖼️</div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /tab-image -->
+
+</div>
+
+<!-- 灯箱预览 -->
+<div id="lightbox" onclick="this.classList.remove('show')">
+  <img id="lightboxImg" alt="preview">
+  <div class="lightbox-tip">点击任意处关闭</div>
 </div>
 
 <script>
 const AGNES_API = 'https://apihub.agnes-ai.com';
 const GH_API = 'https://api.github.com/repos/Aron18/image-uploader/contents';
 const VIDEO_MODEL = 'agnes-video-v2.0';
+const IMAGE_MODEL = 'agnes-image-2.1-flash';
 const FRAME_RATE = 24;
 
 // 首尾帧状态：{ first: {url, name} | null, last: ... }
@@ -610,14 +743,247 @@ function copyText(text, btn) {
     ta.value = text; document.body.appendChild(ta); ta.select();
     document.execCommand('copy'); document.body.removeChild(ta);
     btn.textContent = '✅ 已复制';
-    setTimeout(() => btn.textContent = '📋 复制视频 URL', 1800);
+    setTimeout(() => btn.textContent = old, 1800);
   });
+}
+
+// ==================== 图片生成 Tab ====================
+let refImages = []; // 参考图：[{url, name}] 或上传中 [{uploading:true, name}]
+
+function showImgMsg(text, type) {
+  const m = $('imgMsg');
+  m.textContent = text;
+  m.className = 'msg show ' + type;
+  if (type === 'success') setTimeout(() => m.classList.remove('show'), 6000);
+}
+
+// ---------- Tab 切换 ----------
+function switchTab(tab) {
+  const isVideo = tab === 'video';
+  $('tabBtnVideo').classList.toggle('active', isVideo);
+  $('tabBtnImage').classList.toggle('active', !isVideo);
+  $('videoForm').style.display = isVideo ? '' : 'none';
+  $('imageForm').style.display = isVideo ? 'none' : '';
+  $('tab-video').style.display = isVideo ? '' : 'none';
+  $('tab-image').style.display = isVideo ? 'none' : '';
+}
+
+// ---------- 尺寸计算：1K/2K/3K/4K 按宽高比换算（长边对齐，8 的倍数） ----------
+const SIZE_LONG_EDGE = { '1K': 1024, '2K': 2048, '3K': 3072, '4K': 4096 };
+function computeImgSize() {
+  const sizeSel = $('imgSize').value;
+  if (sizeSel === '1024x768') return { w: 1024, h: 768, fixed: true };
+  const long = SIZE_LONG_EDGE[sizeSel] || 2048;
+  const [rw, rh] = $('imgRatio').value.split(':').map(Number);
+  let w, h;
+  if (rw >= rh) { w = long; h = long * rh / rw; }
+  else { h = long; w = long * rw / rh; }
+  w = Math.max(256, Math.round(w / 8) * 8);
+  h = Math.max(256, Math.round(h / 8) * 8);
+  return { w, h, fixed: false };
+}
+function renderSizeHint() {
+  const s = computeImgSize();
+  $('sizeHint').textContent = s.fixed
+    ? `固定尺寸 ${s.w}×${s.h}（此档宽高比选项不生效）`
+    : `将生成 ${s.w}×${s.h} 像素`;
+}
+
+// ---------- 参考图上传（GitHub 图床 images/，与图床网页共享 Token）----------
+function pickRef() { $('refFile').click(); }
+$('refFile').addEventListener('change', e => {
+  [...e.target.files].forEach(f => uploadRef(f));
+  e.target.value = '';
+});
+// 支持拖拽图片到参考图区域
+$('refRow').addEventListener('dragover', e => e.preventDefault());
+$('refRow').addEventListener('drop', e => {
+  e.preventDefault();
+  [...e.dataTransfer.files].filter(f => f.type.startsWith('image/')).forEach(f => uploadRef(f));
+});
+
+async function uploadRef(file) {
+  if (refImages.filter(r => !r.uploading).length >= 8) { showImgMsg('参考图最多 8 张，请先删除几张再添加', 'error'); return; }
+  const token = ghToken();
+  if (!token) { showImgMsg('上传参考图需要 GitHub Token（repo 权限）。请先到图床网页保存 Token，或点上方创建链接生成。', 'error'); return; }
+  const item = { uploading: true, name: file.name };
+  refImages.push(item);
+  renderRefs();
+  try {
+    const compressed = await maybeCompress(file);
+    const content = await fileToBase64(compressed);
+    const filename = `images/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const res = await fetch(`${GH_API}/${filename}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `upload reference image: ${file.name}`, content, branch: 'main' })
+    });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'HTTP ' + res.status); }
+    const data = await res.json();
+    item.url = data.content.download_url;
+    item.uploading = false;
+    renderRefs();
+  } catch (e) {
+    refImages = refImages.filter(r => r !== item);
+    renderRefs();
+    showImgMsg('参考图上传失败: ' + e.message, 'error');
+  }
+}
+
+function removeRef(i) { refImages.splice(i, 1); renderRefs(); }
+
+function renderRefs() {
+  const row = $('refRow');
+  row.innerHTML = '';
+  refImages.forEach((r, i) => {
+    const box = document.createElement('div');
+    box.className = 'ref-box';
+    if (r.uploading) {
+      box.innerHTML = `<span class="spin">⏳</span><br>上传中`;
+    } else {
+      box.innerHTML = `<button class="ref-remove" onclick="event.stopPropagation();removeRef(${i})">✕</button><img src="${r.url}" alt="ref">`;
+      box.onclick = () => openLightbox(r.url);
+    }
+    row.appendChild(box);
+  });
+  const add = document.createElement('div');
+  add.className = 'ref-box';
+  add.onclick = pickRef;
+  add.innerHTML = '＋<br>添加参考图';
+  row.appendChild(add);
+}
+
+// ---------- 图片任务存储 ----------
+function getImgTasks() { return JSON.parse(localStorage.getItem('image_tasks') || '[]'); }
+function setImgTasks(t) { localStorage.setItem('image_tasks', JSON.stringify(t)); }
+function updateImgTask(task) {
+  const ts = getImgTasks();
+  const idx = ts.findIndex(x => x.id === task.id);
+  if (idx >= 0) ts[idx] = task;
+  setImgTasks(ts);
+}
+
+// ---------- 提交图片生成（同步接口：响应直接返回图片 URL）----------
+async function submitImage() {
+  saveKey();
+  const apiKey = $('apiKey').value.trim();
+  const prompt = $('imgPrompt').value.trim();
+  if (!apiKey) { showImgMsg('请先输入 Agnes API Key', 'error'); return; }
+  if (!prompt) { showImgMsg('请输入图片提示词', 'error'); return; }
+
+  const s = computeImgSize();
+  const sizeStr = `${s.w}x${s.h}`;
+  const refs = refImages.filter(r => r.url).map(r => r.url);
+
+  const body = { model: IMAGE_MODEL, prompt, size: sizeStr };
+  if (refs.length) body.extra_body = { image: refs, response_format: 'url' };
+
+  const task = {
+    id: 'img-' + Date.now(),
+    prompt, size: sizeStr, ratio: $('imgRatio').value, refs,
+    status: 'pending', url: null, error: null,
+    created_at: Date.now()
+  };
+  const tasks = getImgTasks();
+  tasks.unshift(task);
+  setImgTasks(tasks.slice(0, 100));
+  renderImgGrid();
+
+  const btn = $('imgSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 生成中...（约 10~30 秒）';
+  showImgMsg(`正在生成图片（${sizeStr}${refs.length ? '，参考图×' + refs.length : ''}）...`, 'info');
+
+  try {
+    const res = await fetch(`${AGNES_API}/v1/images/generations`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error?.message || data.message || 'HTTP ' + res.status + ' ' + JSON.stringify(data).slice(0, 200));
+    const url = data.data?.[0]?.url;
+    if (!url) throw new Error('响应中没有图片 URL：' + JSON.stringify(data).slice(0, 300));
+
+    task.status = 'completed';
+    task.url = url;
+    updateImgTask(task);
+    renderImgGrid();
+    showImgMsg('✅ 图片生成成功！点击缩略图可预览大图。', 'success');
+    $('imgPrompt').value = '';
+  } catch (e) {
+    task.status = 'failed';
+    task.error = e.message;
+    updateImgTask(task);
+    renderImgGrid();
+    showImgMsg('图片生成失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🖼️ 生成图片';
+  }
+}
+
+// ---------- 手动刷新图片进度 ----------
+function refreshImgProgress() {
+  const tasks = getImgTasks();
+  if (!tasks.length) { showImgMsg('还没有图片生成记录，先提交一个任务吧。', 'info'); return; }
+  renderImgGrid(); // 重新渲染 = 重新加载未显示出来的缩略图
+  const done = tasks.filter(t => t.status === 'completed').length;
+  const pending = tasks.filter(t => t.status === 'pending').length;
+  const failed = tasks.filter(t => t.status === 'failed').length;
+  showImgMsg(
+    `已刷新：共 ${tasks.length} 条 · ✅ 成功 ${done} · ⏳ 进行中 ${pending} · ❌ 失败 ${failed}\n` +
+    `图片接口为同步返回（约 10~30 秒），生成中的卡片在请求返回后自动更新；若缩略图加载失败，刷新后会重新加载。`,
+    'info'
+  );
+}
+
+// ---------- 图片结果渲染 ----------
+function renderImgGrid() {
+  const tasks = getImgTasks();
+  const grid = $('imgGrid');
+  if (!tasks.length) {
+    grid.innerHTML = '<div class="empty">暂无生成结果，提交一个图片生成任务吧 🖼️</div>';
+    return;
+  }
+  grid.innerHTML = tasks.map(t => {
+    let media;
+    if (t.status === 'completed' && t.url) {
+      media = `<img class="img-thumb" src="${t.url}" loading="lazy" alt="result" onclick="openLightbox('${t.url}')" onerror="this.style.display='none'">`;
+    } else if (t.status === 'failed') {
+      media = `<div class="pending-box">❌ 生成失败<br><span style="font-size:11px;color:#c0392b;word-break:break-all">${escapeHtml((t.error || '').slice(0, 90))}</span></div>`;
+    } else {
+      media = `<div class="pending-box"><span class="spin">⏳</span>生成中...<br><span style="font-size:11px">图片接口同步返回，约 10~30 秒</span></div>`;
+    }
+    const meta = `${t.size}${t.refs && t.refs.length ? ' · 参考图×' + t.refs.length : ''} · ${new Date(t.created_at).toLocaleString('zh-CN')}`;
+    const actions = (t.status === 'completed' && t.url) ? `
+      <div class="img-actions">
+        <a href="${t.url}" target="_blank" rel="noopener"><button class="btn btn-sm btn-blue">🔗 打开</button></a>
+        <button class="btn btn-sm btn-green" onclick="copyText('${t.url}', this)">📋 复制URL</button>
+      </div>` : '';
+    return `
+      <div class="img-card">
+        ${media}
+        <div class="img-prompt">${escapeHtml(t.prompt)}</div>
+        <div class="img-meta">${meta}</div>
+        ${actions}
+      </div>`;
+  }).join('');
+}
+
+// ---------- 灯箱预览 ----------
+function openLightbox(url) {
+  $('lightboxImg').src = url;
+  $('lightbox').classList.add('show');
 }
 
 // 初始化
 loadKey();
 updateGhTokenStatus();
 renderTasks();
+renderSizeHint();
+renderRefs();
+renderImgGrid();
 </script>
 </body>
 </html>
