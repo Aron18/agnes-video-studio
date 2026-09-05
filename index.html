@@ -558,16 +558,20 @@ async function submitVideo() {
   if (frames.first && !frames.last) { showMsg('已上传首帧，尾帧也必须上传（首尾帧需成对提供）', 'error'); return; }
   if (!frames.first && frames.last) { showMsg('已上传尾帧，首帧也必须上传（首尾帧需成对提供）', 'error'); return; }
 
-  const body = {
+  // 负面提示词策略：1) 优先顶层 negative_prompt（v2.0 官方字段，2.5 待验证）
+  // 2) 被队列拒绝时自动降级为拼接进主提示词（"。避免出现：" / ". Avoid: "）
+  const finalPrompt = negPrompt
+    ? prompt + (/[\u4e00-\u9fff]/.test(negPrompt) ? '。避免出现：' : '. Avoid: ') + negPrompt
+    : prompt;
+  const buildBody = (nativeNeg, merged) => ({
     model: VIDEO_MODEL,
-    prompt: negPrompt
-      ? prompt + (/[\u4e00-\u9fff]/.test(negPrompt) ? '。避免出现：' : '. Avoid: ') + negPrompt
-      : prompt,
+    prompt: merged ? finalPrompt : prompt,
     mode: 'text',
     seconds,
     size: '720P',            // 2.5-flash 仅支持 720P
-    aspect_ratio: aspectRatio
-  };
+    aspect_ratio: aspectRatio,
+    ...(nativeNeg && negPrompt ? { negative_prompt: negPrompt } : {})
+  });
   const imgUrls = [];
   if (frames.first) imgUrls.push(frames.first.url);
   if (frames.last) imgUrls.push(frames.last.url);
@@ -583,12 +587,23 @@ async function submitVideo() {
   showMsg('正在提交视频生成任务...', 'info');
 
   try {
-    const res = await fetch(`${AGNES_API}/v1/videos`, {
+    let usedMerged = false;
+    let res = await fetch(`${AGNES_API}/v1/videos`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(buildBody(true, false))
     });
-    const data = await res.json().catch(() => ({}));
+    let data = await res.json().catch(() => ({}));
+    // 队列拒绝独立负面字段 → 降级为拼接重试
+    if (!res.ok && negPrompt && /negative_prompt/i.test(JSON.stringify(data).slice(0, 600))) {
+      usedMerged = true;
+      res = await fetch(`${AGNES_API}/v1/videos`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody(false, true))
+      });
+      data = await res.json().catch(() => ({}));
+    }
     if (!res.ok) {
       throw new Error(data.error?.message || data.message || 'HTTP ' + res.status + ' ' + JSON.stringify(data).slice(0, 200));
     }
@@ -599,7 +614,7 @@ async function submitVideo() {
     const task = {
       video_id: videoId,
       model: VIDEO_MODEL,
-      prompt: body.prompt,
+      prompt: usedMerged ? finalPrompt : prompt,
       seconds,
       aspect_ratio: aspectRatio,
       images: imgUrls,
@@ -944,12 +959,24 @@ async function submitImage() {
   const sizeStr = `${s.w}x${s.h}`;
   const refs = refImages.filter(r => r.url).map(r => r.url);
 
-  // 队列不支持独立 negative_prompt 字段，自动并入主提示词
+  // 负面提示词策略：1) 优先经 extra_body 透传 negative_prompt 给下游（原生生效）
+  // 2) 被队列/下游拒绝时自动降级为拼接进主提示词（"。避免出现：" / ". Avoid: "）
   const finalPrompt = negPrompt
     ? prompt + (/[\u4e00-\u9fff]/.test(negPrompt) ? '。避免出现：' : '. Avoid: ') + negPrompt
     : prompt;
-  const body = { model: IMAGE_MODEL, prompt: finalPrompt, size: sizeStr };
-  if (refs.length) body.extra_body = { image: refs, response_format: 'url' };
+  const buildBody = (nativeNeg, merged) => {
+    const b = { model: IMAGE_MODEL, prompt: merged ? finalPrompt : prompt, size: sizeStr };
+    const extra = {};
+    if (refs.length) { extra.image = refs; extra.response_format = 'url'; }
+    if (nativeNeg && negPrompt) extra.negative_prompt = negPrompt;
+    if (Object.keys(extra).length) b.extra_body = extra;
+    return b;
+  };
+  const doFetch = (b) => fetch(`${AGNES_API}/v1/images/generations`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(b)
+  });
 
   const task = {
     id: 'img-' + Date.now(),
@@ -968,18 +995,22 @@ async function submitImage() {
   showImgMsg(`正在生成图片（${sizeStr}${refs.length ? '，参考图×' + refs.length : ''}）...`, 'info');
 
   try {
-    const res = await fetch(`${AGNES_API}/v1/images/generations`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json().catch(() => ({}));
+    let usedMerged = false;
+    let res = await doFetch(buildBody(true, false));
+    let data = await res.json().catch(() => ({}));
+    // 队列/下游拒绝独立负面字段 → 降级为拼接重试
+    if (!res.ok && negPrompt && /negative_prompt/i.test(JSON.stringify(data).slice(0, 600))) {
+      usedMerged = true;
+      res = await doFetch(buildBody(false, true));
+      data = await res.json().catch(() => ({}));
+    }
     if (!res.ok) throw new Error(data.error?.message || data.message || 'HTTP ' + res.status + ' ' + JSON.stringify(data).slice(0, 200));
     const url = data.data?.[0]?.url;
     if (!url) throw new Error('响应中没有图片 URL：' + JSON.stringify(data).slice(0, 300));
 
     task.status = 'completed';
     task.url = url;
+    task.prompt = usedMerged ? finalPrompt : prompt;
     updateImgTask(task);
     renderImgGrid();
     showImgMsg('✅ 图片生成成功！点击缩略图可预览大图。', 'success');
