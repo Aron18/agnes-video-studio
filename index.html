@@ -198,18 +198,30 @@
         <textarea id="prompt" placeholder="例：A cinematic drone shot flying over misty mountains at sunrise, golden light, smooth forward motion, 4k, photorealistic"></textarea>
       </div>
 
-      <!-- 时长 -->
+      <!-- 时长 + 画幅 -->
       <div class="field">
-        <div class="field-label">⏱️ 视频时长 <span class="field-hint">模型上限 441 帧 ≈ 18.4 秒（24fps），帧数须为 8n+1</span></div>
-        <select id="duration">
-          <option value="81">约 3.4 秒（81 帧）</option>
-          <option value="121" selected>约 5.0 秒（121 帧）· 推荐</option>
-          <option value="161">约 6.7 秒（161 帧）</option>
-          <option value="241">约 10.0 秒（241 帧）</option>
-          <option value="321">约 13.4 秒（321 帧）</option>
-          <option value="401">约 16.7 秒（401 帧）</option>
-          <option value="441">约 18.4 秒（441 帧）· 模型上限</option>
-        </select>
+        <div class="field-label">⏱️ 视频时长与画幅 <span class="field-hint">4–12 秒 · agnes-video-2.5-flash · 720P</span></div>
+        <div class="frame-row">
+          <select id="duration" style="flex:1">
+            <option value="4">4 秒</option>
+            <option value="5" selected>5 秒 · 推荐</option>
+            <option value="6">6 秒</option>
+            <option value="7">7 秒</option>
+            <option value="8">8 秒</option>
+            <option value="9">9 秒</option>
+            <option value="10">10 秒</option>
+            <option value="11">11 秒</option>
+            <option value="12">12 秒</option>
+          </select>
+          <select id="aspectRatio" style="flex:1">
+            <option value="16:9" selected>16:9（横屏）</option>
+            <option value="9:16">9:16（竖屏）</option>
+            <option value="1:1">1:1（方形）</option>
+            <option value="4:3">4:3（横）</option>
+            <option value="3:4">3:4（竖）</option>
+            <option value="21:9">21:9（超宽）</option>
+          </select>
+        </div>
       </div>
 
       <!-- 首尾帧 -->
@@ -331,7 +343,6 @@ const AGNES_API = 'https://apihub.agnes-ai.com';
 const GH_API = 'https://api.github.com/repos/Aron18/image-uploader/contents';
 const VIDEO_MODEL = 'agnes-video-2.5-flash';
 const IMAGE_MODEL = 'agnes-image-2.5-flash';
-const FRAME_RATE = 24;
 
 // 首尾帧状态：{ first: {url, name} | null, last: ... }
 let frames = { first: null, last: null };
@@ -493,7 +504,8 @@ async function submitVideo() {
   saveKey();
   const apiKey = $('apiKey').value.trim();
   const prompt = $('prompt').value.trim();
-  const numFrames = parseInt($('duration').value, 10);
+  const seconds = $('duration').value;        // V2.5：字符串 "4"–"12"
+  const aspectRatio = $('aspectRatio').value;
 
   if (!apiKey) { showMsg('请先输入 Agnes API Key', 'error'); return; }
   if (!prompt) { showMsg('请输入视频提示词', 'error'); return; }
@@ -504,13 +516,19 @@ async function submitVideo() {
   const body = {
     model: VIDEO_MODEL,
     prompt,
-    num_frames: numFrames,
-    frame_rate: FRAME_RATE
+    mode: 'text',
+    seconds,
+    size: '720P',            // 2.5-flash 仅支持 720P
+    aspect_ratio: aspectRatio
   };
   const imgUrls = [];
   if (frames.first) imgUrls.push(frames.first.url);
   if (frames.last) imgUrls.push(frames.last.url);
-  if (imgUrls.length) body.extra_body = { image: imgUrls, mode: 'keyframes' };
+  if (imgUrls.length) {
+    body.mode = 'keyframe';  // V2.5：首尾帧为顶层字段（旧版 extra_body/mode:keyframes 已废弃）
+    if (frames.first) body.first_frame = frames.first.url;
+    if (frames.last) body.last_frame = frames.last.url;
+  }
 
   const btn = $('submitBtn');
   btn.disabled = true;
@@ -533,9 +551,10 @@ async function submitVideo() {
 
     const task = {
       video_id: videoId,
+      model: VIDEO_MODEL,
       prompt,
-      num_frames: numFrames,
-      frame_rate: FRAME_RATE,
+      seconds,
+      aspect_ratio: aspectRatio,
       images: imgUrls,
       status: data.status || 'queued',
       progress: data.progress || 0,
@@ -591,7 +610,7 @@ async function diagnoseConnection(apiKey) {
     const r2 = await fetch(`${AGNES_API}/v1/videos`, {
       method: 'POST',
       headers: { 'Authorization': 'Bearer sk-diag-invalid', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: VIDEO_MODEL, prompt: 'diag', num_frames: 81, frame_rate: 24 })
+      body: JSON.stringify({ model: VIDEO_MODEL, prompt: 'diag', mode: 'text', seconds: '5', size: '720P', aspect_ratio: '16:9' })
     });
     const t2 = await r2.text();
     if (r2.status === 401) {
@@ -651,7 +670,9 @@ async function refreshAll() {
   let updated = 0;
   for (const t of pending) {
     try {
-      const res = await fetch(`${AGNES_API}/agnesapi?video_id=${encodeURIComponent(t.video_id)}`, {
+      // V2.5 查询必须带 model_name；旧任务（V2.0）带上也无害
+      const modelName = encodeURIComponent(t.model || 'agnes-video-v2.0');
+      const res = await fetch(`${AGNES_API}/agnesapi?video_id=${encodeURIComponent(t.video_id)}&model_name=${modelName}`, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
       const data = await res.json().catch(() => ({}));
@@ -661,8 +682,8 @@ async function refreshAll() {
       } else {
         t.status = data.status || t.status;
         t.progress = data.progress ?? t.progress;
-        // 视频链接在 remixed_from_video_id 字段
-        const vurl = data.remixed_from_video_id || data.video_url || data.url;
+        // V2.5 完成后视频链接在 metadata.url；兼容旧版字段
+        const vurl = (data.metadata && data.metadata.url) || data.remixed_from_video_id || data.video_url || data.url;
         if (vurl && (t.status === 'completed' || t.status === 'success' || vurl.endsWith('.mp4') || vurl.includes('.mp4'))) {
           t.status = 'completed';
           t.progress = 100;
@@ -692,7 +713,7 @@ function renderTasks() {
     return;
   }
   list.innerHTML = tasks.map((t, i) => {
-    const secs = (t.num_frames / t.frame_rate).toFixed(1);
+    const secs = t.seconds ? String(t.seconds) : (t.num_frames / t.frame_rate).toFixed(1);
     let badge = '', bar = '', videoBlock = '', framesBlock = '';
     if (t.status === 'completed') badge = '<span class="status-badge status-completed">✅ 已完成</span>';
     else if (t.status === 'failed') badge = '<span class="status-badge status-failed">❌ 失败</span>';
@@ -720,7 +741,7 @@ function renderTasks() {
           ${badge}
         </div>
         ${bar}
-        <div class="task-meta">⏱️ ${secs} 秒 · ${t.num_frames} 帧 · ${new Date(t.created_at).toLocaleString('zh-CN')}</div>
+        <div class="task-meta">⏱️ ${secs} 秒${t.aspect_ratio ? ' · ' + t.aspect_ratio : ''} · ${t.model || 'agnes-video-v2.0'} · ${new Date(t.created_at).toLocaleString('zh-CN')}</div>
         ${framesBlock}
         ${videoBlock}
         <div class="task-videoid">video_id: ${t.video_id}</div>
