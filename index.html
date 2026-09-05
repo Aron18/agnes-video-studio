@@ -154,7 +154,7 @@
 
       <!-- 首尾帧 -->
       <div class="field">
-        <div class="field-label">🖼️ 首尾帧 <span class="field-hint">选填，均为公开图片 URL；上传走 GitHub 图床（与图床网页共享 Token）</span></div>
+        <div class="field-label">🖼️ 首尾帧 <span class="field-hint">选填，但需成对上传（传了首帧则尾帧必填，反之亦然）；走 GitHub 图床（与图床网页共享 Token）</span></div>
         <div class="frame-row">
           <div class="frame-box" id="firstFrameBox" onclick="pickFrame('first')">
             <div class="frame-icon">🏁</div>
@@ -364,6 +364,9 @@ async function submitVideo() {
 
   if (!apiKey) { showMsg('请先输入 Agnes API Key', 'error'); return; }
   if (!prompt) { showMsg('请输入视频提示词', 'error'); return; }
+  // 首尾帧成对校验：上传了其中一个，另一个必填
+  if (frames.first && !frames.last) { showMsg('已上传首帧，尾帧也必须上传（首尾帧需成对提供）', 'error'); return; }
+  if (!frames.first && frames.last) { showMsg('已上传尾帧，首帧也必须上传（首尾帧需成对提供）', 'error'); return; }
 
   const body = {
     model: VIDEO_MODEL,
