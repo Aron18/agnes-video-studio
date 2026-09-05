@@ -74,7 +74,7 @@
   .frame-status.error { color: #e74c3c; }
 
   /* 提示条 */
-  .msg { padding: 13px 18px; border-radius: 10px; margin: 12px 0; font-size: 14px; display: none; word-break: break-word; }
+  .msg { padding: 13px 18px; border-radius: 10px; margin: 12px 0; font-size: 14px; display: none; word-break: break-word; white-space: pre-line; line-height: 1.6; }
   .msg.show { display: block; }
   .msg.success { background: #e8f8f0; color: #1e8449; border: 1px solid #a9dfbf; }
   .msg.error { background: #fff0f0; color: #c0392b; border: 1px solid #f5b7b1; }
@@ -127,6 +127,7 @@
         <div class="field-label">🔑 Agnes API Key <span id="keyStatus" class="badge-ok" style="display:none;">✅ 已保存</span></div>
         <div class="key-row">
           <input type="password" id="apiKey" placeholder="sk-xxxx（从 https://platform.agnes-ai.com/ 获取）">
+          <button class="btn btn-sm btn-gray" onclick="runDiagnose()">🔌 诊断</button>
           <button class="btn btn-sm btn-gray" onclick="forgetKey()">🗑️ 忘记</button>
         </div>
       </div>
@@ -416,16 +417,85 @@ async function submitVideo() {
     renderFrameBox('first');
     renderFrameBox('last');
   } catch (e) {
-    let hint = e.message;
-    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-      hint = '网络请求失败（可能是浏览器 CORS 限制或网络不通）: ' + e.message +
-        '。Agnes API 若不允许浏览器直连，需配置代理。';
+    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.name === 'TypeError') {
+      showMsg('⏳ 网络请求未到达服务器，正在自动诊断连接...', 'info');
+      const diag = await diagnoseConnection(apiKey);
+      showMsg('提交失败（网络层）。诊断结果：\n' + diag, 'error');
+    } else {
+      showMsg('提交失败: ' + e.message, 'error');
     }
-    showMsg('提交失败: ' + hint, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = '🎬 生成视频';
   }
+}
+
+// ---------- 连接诊断 ----------
+async function diagnoseConnection(apiKey) {
+  const lines = [];
+  // 测试1：GET agnesapi（无 key，应返回 401 = 网络通 + CORS 通）
+  try {
+    const t0 = Date.now();
+    const r = await fetch(`${AGNES_API}/agnesapi?video_id=diag`, { method: 'GET' });
+    const ms = Date.now() - t0;
+    if (r.status === 401 || r.status === 400 || r.status === 200) {
+      lines.push(`✅ 网络+CORS 正常（GET ${r.status}，${ms}ms）`);
+    } else {
+      lines.push(`⚠️ GET 返回 HTTP ${r.status}（${ms}ms）`);
+    }
+  } catch (e) {
+    lines.push('❌ 无法连接 apihub.agnes-ai.com：' + e.message);
+    lines.push('   可能原因：① 网络/代理不通（检查 VPN/代理是否拦截该域名）');
+    lines.push('   ② 浏览器扩展拦截（广告拦截/隐私扩展，试试无痕窗口）');
+    lines.push('   ③ DNS 污染（换网络或开全局代理）');
+    return lines.join('\n');
+  }
+  // 测试2：POST 预检 + 假 key（应返回 401 无效令牌 = POST 链路通）
+  try {
+    const r2 = await fetch(`${AGNES_API}/v1/videos`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer sk-diag-invalid', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: VIDEO_MODEL, prompt: 'diag', num_frames: 81, frame_rate: 24 })
+    });
+    const t2 = await r2.text();
+    if (r2.status === 401) {
+      lines.push('✅ POST 提交链路正常（服务器正确拒绝假 key）');
+    } else {
+      lines.push(`⚠️ POST 返回 HTTP ${r2.status}：${t2.slice(0, 100)}`);
+    }
+  } catch (e) {
+    lines.push('❌ POST 请求失败：' + e.message + '（预检/拦截问题）');
+    return lines.join('\n');
+  }
+  // 测试3：真实 key 有效性
+  if (apiKey) {
+    try {
+      const r3 = await fetch(`${AGNES_API}/agnesapi?video_id=diag-keycheck`, {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      if (r3.status === 200) {
+        lines.push('✅ API Key 有效');
+      } else if (r3.status === 401) {
+        lines.push('❌ API Key 无效或已过期（401），请检查 Key');
+      } else {
+        lines.push(`⚠️ Key 检查返回 HTTP ${r3.status}（任务不存在属正常，Key 大概率有效）`);
+      }
+    } catch (e) {
+      lines.push('⚠️ Key 检查请求异常：' + e.message);
+    }
+  } else {
+    lines.push('⚠️ 未填写 API Key');
+  }
+  lines.push('👉 若以上全 ✅ 但提交仍失败，请重试一次（可能瞬时网络抖动）');
+  return lines.join('\n');
+}
+
+async function runDiagnose() {
+  saveKey();
+  const apiKey = $('apiKey').value.trim();
+  showMsg('🔌 正在诊断连接...', 'info');
+  const result = await diagnoseConnection(apiKey);
+  showMsg(result, result.includes('❌') ? 'error' : 'success');
 }
 
 // ---------- 刷新任务状态 ----------
@@ -433,8 +503,9 @@ async function refreshAll() {
   const apiKey = $('apiKey').value.trim();
   if (!apiKey) { showMsg('请先输入 Agnes API Key', 'error'); return; }
   const tasks = getTasks();
+  if (!tasks.length) { showMsg('任务列表为空：还没有成功提交过任务。如果刚才点了"生成视频"但这里没出现任务卡片，说明提交失败了，请看上方红色错误提示，或点 🔌 诊断 按钮检查连接。', 'info'); return; }
   const pending = tasks.filter(t => t.status !== 'completed' && t.status !== 'failed');
-  if (!pending.length) { showMsg('没有进行中的任务', 'info'); return; }
+  if (!pending.length) { showMsg('没有进行中的任务：所有任务都已是 ✅完成 / ❌失败 状态。可直接查看下方任务卡片。', 'info'); return; }
 
   const btn = $('refreshBtn');
   btn.disabled = true;
