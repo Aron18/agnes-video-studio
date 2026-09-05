@@ -192,6 +192,7 @@
   #lightbox.show { opacity: 1; visibility: visible; }
   #lightbox img { max-width: 92vw; max-height: 90vh; border-radius: 12px; box-shadow: 0 8px 60px rgba(0,0,0,.5); transform: scale(.96); transition: transform .22s ease; }
   #lightbox.show img { transform: scale(1); }
+  #lightbox video { max-width: 92vw; max-height: 88vh; border-radius: 12px; box-shadow: 0 8px 60px rgba(0,0,0,.5); background: #000; }
   #lightbox .lightbox-tip { position: fixed; bottom: 18px; left: 0; right: 0; text-align: center; color: #ccc; font-size: 12px; }
   .gh-token-area { font-size: 12px; color: #888; margin-top: 6px; }
   .gh-token-area a { color: #667eea; }
@@ -790,7 +791,10 @@ function renderTasks() {
     }
     if (t.video_url) {
       videoBlock = `
-        <video class="task-video" src="${t.video_url}" controls preload="metadata"></video>
+        <div class="video-thumb" onclick="openVideoLightbox('${t.video_url}')" title="点击播放">
+          <video class="task-video" src="${t.video_url}" preload="metadata" muted></video>
+          <span class="vt-play">▶</span>
+        </div>
         <div class="task-actions">
           <a href="${t.video_url}" target="_blank" rel="noopener"><button class="btn btn-sm btn-blue">🔗 新标签页打开</button></a>
           <button class="btn btn-sm btn-green" onclick="copyText('${t.video_url}', this)">📋 复制视频 URL</button>
@@ -1076,10 +1080,18 @@ function renderImgGrid() {
   }).join('');
 }
 
-// ---------- 灯箱预览 ----------
+// ---------- 灯箱预览（图片 / 视频） ----------
 function openLightbox(url) {
-  $('lightboxImg').src = url;
+  $('lightboxContent').innerHTML = `<img src="${url}" alt="preview">`;
   $('lightbox').classList.add('show');
+}
+function openVideoLightbox(url) {
+  $('lightboxContent').innerHTML = `<video src="${url}" controls autoplay playsinline onclick="event.stopPropagation()"></video>`;
+  $('lightbox').classList.add('show');
+}
+function closeLightbox() {
+  $('lightbox').classList.remove('show');
+  $('lightboxContent').innerHTML = '';  // 清空以停止视频播放
 }
 
 // 初始化
