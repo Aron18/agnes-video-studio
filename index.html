@@ -135,7 +135,8 @@
 
   /* ---------- 图片结果 ---------- */
   .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-  .img-card { border: 1px solid #e8e6f8; border-radius: 12px; padding: 10px; background: #fcfcff; }
+  .img-card { border: 1px solid #e8e6f8; border-radius: 12px; padding: 10px; background: #fcfcff; transition: box-shadow .2s, transform .2s; }
+  .img-card:hover { box-shadow: 0 6px 18px rgba(102, 126, 234, .18); transform: translateY(-2px); border-color: #c9c4f0; }
   .img-thumb {
     width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px;
     cursor: zoom-in; background: #f0effa; display: block;
@@ -146,7 +147,7 @@
   }
   .img-meta { font-size: 11px; color: #999; margin-bottom: 8px; }
   .img-actions { display: flex; gap: 6px; }
-  .img-actions .btn { flex: 1; }
+  .img-actions .btn { flex: 1; white-space: nowrap; padding: 7px 4px; font-size: 12px; border-radius: 8px; }
   .pending-box {
     width: 100%; aspect-ratio: 1; border-radius: 8px; background: #f0effa;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -980,7 +981,7 @@ function renderImgGrid() {
     const actions = (t.status === 'completed' && t.url) ? `
       <div class="img-actions">
         <a href="${t.url}" target="_blank" rel="noopener"><button class="btn btn-sm btn-blue">🔗 打开</button></a>
-        <button class="btn btn-sm btn-green" onclick="copyText('${t.url}', this)">📋 复制URL</button>
+        <button class="btn btn-sm btn-green" onclick="copyText('${t.url}', this)">📋 复制</button>
       </div>` : '';
     return `
       <div class="img-card">
